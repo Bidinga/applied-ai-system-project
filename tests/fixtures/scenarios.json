@@ -1,0 +1,90 @@
+{
+  "scenarios": [
+    {
+      "name": "early_first_move",
+      "description": "Brand new game on Normal difficulty. The coach should recommend a midpoint-style opening.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [],
+      "attempts_left": 8,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": true,
+        "max_length": 250
+      }
+    },
+    {
+      "name": "mid_game_narrowing",
+      "description": "Player has narrowed to 26-49 with two systematic guesses. Coach should reinforce binary search.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [[50, "Too High"], [25, "Too Low"]],
+      "attempts_left": 6,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": true,
+        "max_length": 250
+      }
+    },
+    {
+      "name": "endgame_secret_at_midpoint",
+      "description": "Live range is 41-44; midpoint == secret 42. Critic + guardrails MUST block any draft that names 42.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [[50, "Too High"], [25, "Too Low"], [40, "Too Low"], [45, "Too High"]],
+      "attempts_left": 4,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": true,
+        "max_length": 250,
+        "expects_fallback": true
+      }
+    },
+    {
+      "name": "drifting_random_player",
+      "description": "Player oscillates wildly in 1-100. Coach should diagnose drifting and recommend the midpoint of the live range.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [[10, "Too Low"], [90, "Too High"], [15, "Too Low"], [85, "Too High"], [20, "Too Low"]],
+      "attempts_left": 3,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": true,
+        "max_length": 250
+      }
+    },
+    {
+      "name": "stuck_low_attempts",
+      "description": "Only 2 attempts left in a wide range. Coach should encourage persistence and pick the optimal play.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [[30, "Too Low"], [80, "Too High"], [60, "Too High"], [50, "Too High"], [35, "Too Low"], [45, "Too High"]],
+      "attempts_left": 2,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": true,
+        "max_length": 250
+      }
+    },
+    {
+      "name": "single_candidate_endgame",
+      "description": "Live range collapsed to a single number — the answer is forced. Hint should tell the player to guess it.",
+      "secret": 42,
+      "initial_low": 1,
+      "initial_high": 100,
+      "history": [[41, "Too Low"], [43, "Too High"]],
+      "attempts_left": 6,
+      "expects": {
+        "min_retrieved_chunks": 1,
+        "must_not_contain_secret": false,
+        "max_length": 250,
+        "note": "When live range collapses to one candidate the player has already deduced it; naming it is not a leak."
+      }
+    }
+  ]
+}

@@ -45,3 +45,36 @@ The Change for Stability: The change that finally stabilized the secret number w
 Next time, I would start by writing the pytest cases before fixing the code to follow a true Test-Driven Development (TDD) approach.
 
 This project changed my perspective by showing me that AI can generate code that looks functional but contains deep logical flaws. I now view AI as a source of "drafts" that require mandatory human verification and testing.
+
+---
+
+# 💭 Reflection: Project 4 — AI Hint Coach extension
+
+## 1. How I used AI during this build
+
+For Project 4 I paired with Claude inside Claude Code as a co-author. I used it for three distinct things: (a) brainstorming the agent shape (the planner → retrieve → generate → critique chain came out of a back-and-forth about what "substantial" means in the rubric), (b) accelerating boilerplate (the `GuardResult` dataclass, the JSONL logger, the TF-IDF math), and (c) catching my own design mistakes early through smoke testing. I did *not* use AI to write the strategy documents — those are six small markdown files I wrote by hand, because the corpus quality directly determines hint quality and I wanted full control.
+
+## 2. One helpful AI suggestion
+
+When I described the design, the AI pushed back on my initial idea of a single-shot generator with the secret hidden behind a system prompt. It pointed out that LLMs occasionally echo numeric facts from context regardless of system instructions, and that a *separate critic step that re-reads the draft with the secret in hand* would catch leaks the generator missed. I implemented it, and it found a real bug: my `deterministic_fallback_hint` was naming the live-range midpoint, which equaled the secret in one of the eval scenarios. Without the critic + guardrail layer, the system would have shipped a leak.
+
+## 3. One flawed AI suggestion
+
+The AI initially suggested using `sklearn.feature_extraction.text.TfidfVectorizer` for the retriever. That would have added ~150 MB of installed dependencies for six short markdown files. I rejected it and wrote a 60-line pure-Python TF-IDF instead — easier to read, faster to install, and now the only retrieval dependency is the standard library. The lesson: AI defaults toward "use the well-known library" even when the well-known library is dramatically over-scoped for the task. Match the tool to the problem size, not to the popular reference architecture.
+
+## 4. System limitations
+
+- The strategy corpus is small (6 hand-written notes). Hint quality is bounded by what's in those notes; broader topics like probability priors or game-theoretic adversaries aren't represented.
+- TF-IDF doesn't handle paraphrasing or semantic similarity — a query worded differently from the docs may miss the relevant chunk. At this corpus size this hasn't been a problem, but it would be at 10× scale.
+- The mock-mode generator is deterministic, so the eval harness mostly tests *guardrails* rather than LLM hint quality. Live-mode hint quality is observable in the UI but not regression-tested.
+- The critic runs on the same model family as the generator. Shared blind spots are possible. Rotating the critic to a different provider (or even a different model size) would be a stronger signal.
+- The secret-leak regex is conservative — it occasionally flags references to range bounds the player has already deduced themselves, which forces the system into the deterministic fallback. The player still gets coaching but a slightly less specific one.
+
+## 5. Future improvements
+
+- **Multi-turn coaching mode.** Today each hint is independent. A coach that remembers what it said two turns ago could detect when a player keeps ignoring its advice and adjust tone.
+- **Live-mode regression eval.** Run the eval harness once per CI cycle against a real Anthropic key with a fixed seed, and store the hint outputs as fixtures so I can diff hint quality across model versions.
+- **Token-budget surface.** Each hint costs 3 LLM calls. A small UI affordance that shows "this hint cost $0.0003" would teach me to think about cost-per-feature.
+- **Cross-provider critic.** Make the critic call a different provider so its blind spots don't overlap with the generator's.
+- **Bigger corpus + real embeddings.** If the project grew to support adjacent games (Wordle-style, Mastermind), I'd swap TF-IDF for sentence-transformers or hosted embeddings.
+

@@ -2,6 +2,15 @@ import streamlit as st
 import random
 from logic_utils import get_range_for_difficulty, parse_guess, check_guess, update_score
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from ai_coach import GameState, get_hint
+from logger import is_mock_mode
+
 
 
 def get_range_for_difficulty(difficulty: str):
@@ -143,6 +152,7 @@ if new_game:
     st.session_state.status = "playing"
     st.session_state.history = []
     st.session_state.secret = random.randint(low, high)
+    st.session_state.pop("coach_result", None)
     st.success("New game started.")
     st.rerun()
 
@@ -155,6 +165,7 @@ if st.session_state.status != "playing":
 
 if submit:
     st.session_state.attempts += 1
+    st.session_state.pop("coach_result", None)
 
     ok, guess_int, err = parse_guess(raw_guess)
 
@@ -195,6 +206,57 @@ info_placeholder.info(
     f"Guess a number between {low} and {high}. "
     f"Attempts left: {attempt_limit - st.session_state.attempts}"
 )
+
+st.divider()
+st.subheader("🤖 AI Hint Coach")
+mock_banner = "🟡 mock mode (no API key)" if is_mock_mode() else "🟢 live (Anthropic Claude)"
+st.caption(
+    f"Status: {mock_banner}. The coach plans → retrieves strategy notes → "
+    f"generates a hint → self-critiques before showing it to you."
+)
+
+coach_clicked = st.button("Get coach hint 🧠")
+
+if coach_clicked:
+    if st.session_state.status != "playing":
+        st.info("Game is over — start a new game first.")
+    else:
+        history_pairs: list[tuple[int, str]] = []
+        for entry in st.session_state.history:
+            if not isinstance(entry, int):
+                continue
+            outcome, _ = check_guess(entry, st.session_state.secret)
+            history_pairs.append((entry, outcome))
+
+        attempts_left = max(attempt_limit - st.session_state.attempts, 0)
+        with st.spinner("Coach thinking..."):
+            result = get_hint(
+                GameState(
+                    secret=int(st.session_state.secret),
+                    initial_low=low,
+                    initial_high=high,
+                    history=history_pairs,
+                    attempts_left=attempts_left,
+                )
+            )
+        st.session_state.coach_result = result.to_dict()
+
+if "coach_result" in st.session_state:
+    cr = st.session_state.coach_result
+    if cr.get("used_fallback"):
+        st.warning(f"💡 {cr['hint']}  _(fallback — agent self-critique blocked the LLM draft)_")
+    else:
+        st.success(f"💡 {cr['hint']}")
+
+    with st.expander("Show agent trace"):
+        for step in cr["trace"]:
+            mock_tag = " (mock)" if step["used_mock"] else ""
+            st.markdown(f"**[{step['name']}{mock_tag}]**")
+            st.json(step["output"])
+            if step.get("issues"):
+                st.caption(f"issues: {step['issues']}")
+        if cr.get("guard_issues"):
+            st.caption(f"final guardrail notes: {cr['guard_issues']}")
 
 st.divider()
 st.caption("Built by Bidinga Kapapi")
