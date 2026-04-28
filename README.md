@@ -1,4 +1,5 @@
 loom link - https://www.loom.com/share/cff5493ecc544b58a9fb60e1f9722ca2
+reflection link - https://docs.google.com/document/d/13YnmFAFn430Y2NZPB9WjmVxP5drBnOyqaBO7daFWQbc/edit?tab=t.0
   Game Glitch Investigator +  AI Coach, Profile & Themed Games
 
 > **Project 4 — Applied AI System.** Extends a previous coursework project with a substantial set of new AI features (RAG, agentic workflow, persistent player profile, AI scouting reports, themed trivia games, plain-English coach narration, reliability harness) fully integrated into the running app.
