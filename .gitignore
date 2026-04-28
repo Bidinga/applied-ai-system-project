@@ -33,6 +33,9 @@ coverage.xml
 *.log
 logs/*.jsonl
 
+# Persistent player data
+data/
+
 # OS generated files
 .DS_Store
 Thumbs.db

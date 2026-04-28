@@ -1,6 +1,6 @@
-# 🎮 Game Glitch Investigator + 🤖 AI Hint Coach
+# 🎮 Game Glitch Investigator + 🧠 AI Coach, Profile & Themed Games
 
-> **Project 4 — Applied AI System.** Extends a previous coursework project with a substantial new AI feature (RAG + agentic workflow + reliability harness) fully integrated into the running app.
+> **Project 4 — Applied AI System.** Extends a previous coursework project with a substantial set of new AI features (RAG, agentic workflow, persistent player profile, AI scouting reports, themed trivia games, plain-English coach narration, reliability harness) fully integrated into the running app.
 
 ## Original project (Modules 1–3)
 
@@ -8,45 +8,69 @@ The base project is **Game Glitch Investigator: The Impossible Guesser** — a S
 
 ## What this project adds
 
-This extension keeps the original game intact and bolts on an **AI Hint Coach**: after each guess, the player can ask for strategic coaching. Internally, the coach runs a four-step agent loop — *plan → retrieve → generate → self-critique* — over a custom corpus of guessing-strategy notes, and never reveals the secret thanks to layered guardrails. Why it matters: it turns a static debugging exercise into a working applied-AI system that demonstrates retrieval-augmented generation, multi-step agent reasoning, and an evaluation harness, all with a mock mode so it stays demoable without an API key.
+The extension turns a single-shot guessing exercise into an applied AI system that *gets to know the player*. Concretely:
+
+- **🧠 AI Hint Coach** — agentic loop (*plan → retrieve → generate → self-critique*) over a custom RAG corpus of guessing-strategy notes. Hint never reveals the secret thanks to layered guardrails.
+- **🗣️ Plain-English coach narration** — instead of a JSON agent-trace dump, the UI shows a friendly bullet list ("I noticed you're drifting · I read my notes on Common Mistakes · I caught my first draft was leaking the answer · I'm fairly confident in this hint") so non-developers can see the AI thinking.
+- **📋 Persistent player profile** — every finished game is saved to `data/player_profile.json`. The sidebar shows games played, win rate, average attempts to win, and the **AI-classified playstyle** (`binary_searcher` / `edge_hunter` / `drifter` / `systematic` / `single_shot`).
+- **📝 AI scouting report** — when a game ends, a templated-or-LLM-generated 2–4 sentence personalized review tells the player how they played, references their stats, and gives one specific suggestion for next time.
+- **🎯 Themed game mode** — a sidebar selector turns the round into trivia: *Guess the year humans walked on the Moon · Guess Iceland's population · Guess the height of Mount Everest in meters · Guess the year Leonardo started the Mona Lisa · Pi to 4 digits ·* and 7 more. The fact is revealed at end-of-game.
+- **🔒 No more spoilers** — the *Developer Debug* panel from Modules 1–3 no longer reveals the secret while the game is in progress; it shows only after win/loss.
+- **🛡️ Reliability layer** — guardrails (secret-leak regex, length cap, fallback hint, defense-in-depth safety net), structured JSONL logging of every LLM call, eval harness with PASS/FAIL summary and confidence aggregation, 49 unit tests.
+
+Why it matters: the game now *uses AI to do something the user can feel* — describing how they play, generating personalized feedback, picking themes, and explaining its own thinking — instead of bolting AI on as a side panel.
 
 ## Architecture overview
 
 ```
-                ┌──────────────────────────────────────────────┐
-                │  Player (browser)  ──  Streamlit UI / app.py │
-                └──────────────────────┬───────────────────────┘
-              guess + history          │           ▲ rendered hint
-                                       ▼           │ + agent trace
-                ┌──────────────────────────────────────────────┐
-                │   Game logic — logic_utils.py  (UNCHANGED)   │
-                └──────────────────────┬───────────────────────┘
-                                       ▼
-                ╔═══════════════════════════════════════════════╗
-                ║   AI Hint Coach — ai_coach.py                 ║
-                ║                                               ║
-                ║  [1] Planner   (Claude haiku)  → JSON intent  ║
-                ║  [2] Retriever (TF-IDF)        → strategy     ║
-                ║                                   chunks      ║
-                ║  [3] Generator (Claude sonnet) → hint draft   ║
-                ║  [4] Critic    (Claude haiku   → pass / fail  ║
-                ║                 + regex guard)                ║
-                ║       ↳ on fail: 1 retry, then deterministic  ║
-                ║         fallback_hint (always safe)           ║
-                ╚═══════════════════════════════════════════════╝
-                                       ▼
-                ┌──────────────────────────────────────────────┐
-                │   Hint + agent trace shown to player         │
-                └──────────────────────────────────────────────┘
+                  ┌──────────────────────────────────────────────────────┐
+                  │  Player (browser)  ──  Streamlit UI · app.py         │
+                  │  sidebar: difficulty + game-mode + profile stats     │
+                  └──────────────┬───────────────────────────────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐──────────────────┐
+              ▼                  ▼                  ▼                  ▼
+   ┌────────────────┐  ┌──────────────────┐  ┌────────────────┐  ┌──────────────────┐
+   │ themes.py      │  │ logic_utils.py   │  │ ai_coach.py    │  │ player_profile.py│
+   │ 12 curated     │  │ parse / check /  │  │ AGENT LOOP:    │  │ load / save /    │
+   │ trivia themes  │  │ score (UNCHANGED)│  │ plan→retrieve→ │  │ classify play-   │
+   │ + Classic mode │  │                  │  │ generate→      │  │ style + stats    │
+   │ + AI-generated │  │                  │  │ self-critique  │  │ data/player_     │
+   │ themes (live)  │  │                  │  │                │  │ profile.json     │
+   └────────┬───────┘  └──────────────────┘  └───────┬────────┘  └─────────┬────────┘
+            │                                        │                    │
+            │                       ┌────────────────┼────────────────┐   │
+            │                       ▼                ▼                ▼   │
+            │              ┌──────────────┐ ┌──────────────┐  ┌──────────┐│
+            │              │ retriever.py │ │ guardrails.py│  │narrator. ││
+            │              │ TF-IDF over  │ │ secret-leak  │  │py        ││
+            │              │ assets/      │ │ regex,       │  │converts  ││
+            │              │ strategy_    │ │ length cap,  │  │trace →   ││
+            │              │ docs/*.md    │ │ fallback     │  │plain-    ││
+            │              └──────────────┘ └──────────────┘  │English   ││
+            │                                                 └────┬─────┘│
+            ▼                                                      │      ▼
+   ┌──────────────────┐                                            │   ┌─────────────┐
+   │ themed prompt    │   (during game)                            │   │ post-game   │
+   │ shown to player  │   ◀──────────────────  hint + narration ───┘   │ AI scouting │
+   └──────────────────┘                                                │ report      │
+                                                                       │(ai_coach.   │
+                                              (after game ends)        │ get_post_   │
+                                              ◀──────────────────────  │ game_review)│
+                                                                       └─────────────┘
 
-  Reliability layer:
-    logger.py        JSONL log of every step (logs/coach.jsonl)
-    guardrails.py    secret-leak regex, length cap, mock canned outputs
-    eval_harness.py  6 scripted scenarios, prints PASS/FAIL summary
-    tests/           pytest: guardrails, retriever, original game logic
+  Reliability layer (always-on):
+    logger.py         JSONL log of every step  → logs/coach.jsonl
+    guardrails.py     secret-leak regex + length cap + safe fallback + confidence scorer
+    eval_harness.py   6 scripted scenarios, PASS/FAIL summary, avg confidence
+    tests/            pytest — 49 tests across 6 modules
 ```
 
-The coach's input is a `GameState` (initial range, history of `(guess, outcome)` pairs, attempts left). The output is a `CoachResult` with the validated hint, a `used_fallback` flag, and the full agent trace. See [docs/architecture.md](docs/architecture.md) for a fuller walkthrough.
+Data flow in one sentence: **theme + difficulty → game state → coach (RAG + agent + critic) → narration → UI → on win/loss → profile + AI scouting report**.
+
+The coach's input is a `GameState` (initial range, history of `(guess, outcome)` pairs, attempts left). The output is a `CoachResult` with the validated hint, a `used_fallback` flag, a `confidence` score, and the full agent trace (which `narrator.py` converts into the player-facing bullets). See [docs/architecture.md](docs/architecture.md) for a deeper component-by-component walkthrough, and [assets/diagrams/system_architecture.md](assets/diagrams/system_architecture.md) for a standalone copy of the diagram with placeholders for demo screenshots.
+
+For a full reflection on AI collaboration, biases, evaluation results, and misuse risks, see the [model_card.md](model_card.md).
 
 ## Setup instructions
 
@@ -79,60 +103,62 @@ To run with the real LLM, set `ANTHROPIC_API_KEY` in `.env` and either remove `M
 
 ## Sample interactions
 
-All three examples are real outputs captured by `python eval_harness.py` running in mock mode (LLM responses are deterministic canned outputs; retrieval and guardrails run for real).
+All examples are real outputs captured in mock mode (deterministic canned LLM responses; retrieval, guardrails, profile, and narration run for real).
 
-### Example 1 — fresh game, optimal opening
+### Example 1 — themed game with plain-English coach narration
 
-**Input** — initial range 1–100, no history, 8 attempts left.
+**Input.** Player picks **Game mode → "Moon landing"** in the sidebar. The header shows: *"Guess the year humans first walked on the Moon."* Range 1900–2000. Player guesses 1950 (too low), 1990 (too high), then clicks **"Get coach hint"**.
 
-```
-[planner]   {"situation":"early","strategy_focus":"binary_search","query":"binary search midpoint optimal first move"}
-[retriever] retrieved: ["binary_search.md", "information_theory.md"]
-[generator] "Best opening for 1-100 is the midpoint 50. Each midpoint guess halves the remaining range."
-[critic]    pass — no secret leak, on-topic
-```
+**Coach output:**
+> 💡 Your live range is 1951-1989. The midpoint 1970 eliminates the most candidates regardless of the answer.
 
-**Output**: `💡 Best opening for 1-100 is the midpoint 50. Each midpoint guess halves the remaining range.`
+**"How the coach thought about this" expander (player-facing, no JSON):**
+- 🔍 **What I noticed.** I looked at your guesses and saw that you've made some progress narrowing the range.
+- 📚 **What I read.** I pulled my notes on how to shrink the live range — specifically *Range Narrowing* and *Binary Search*.
+- ✅ **What I checked.** I re-read my hint with the answer in front of me to make sure I wasn't accidentally giving it away.
+- 💪 I'm very confident in this hint (100%).
 
-### Example 2 — drifting player, mid-game
+After the win on attempt 4, the theme reveal appears: *"📖 **Moon landing** — Apollo 11. Neil Armstrong stepped onto the lunar surface on July 20, 1969."*
 
-**Input** — initial range 1–100, history `[(10, low), (90, high), (15, low), (85, high), (20, low)]`, 3 attempts left.
+### Example 2 — post-game scouting report (drifter loss)
 
-```
-[planner]   {"situation":"drifting","strategy_focus":"common_mistakes","query":"anchoring drifting wandering ignoring feedback"}
-[retriever] retrieved: ["common_mistakes.md", "range_narrowing.md"]
-[generator] "You're drifting inside 21-84. Anchor on the midpoint: try 52, then halve again based on the feedback."
-[critic]    pass
-```
+**Input.** Player loses a Classic Hard game after wandering: guesses `[10, 90, 15, 85, 20, 80]`, never narrows.
 
-**Output**: `💡 You're drifting inside 21-84. Anchor on the midpoint: try 52, then halve again based on the feedback.`
+**Auto-generated review** (from `get_post_game_review`):
+> Your guesses bounced around without a clear pattern — a classic drifter run. The fastest fix: after each piece of feedback, recompute the midpoint of what's still possible and aim there. You ran out of attempts this round. Across your 5 games your win rate is 60.0%. You average 4.7 attempts when you win. Next game: pause after each piece of feedback, find the live midpoint, and guess there.
 
-The coach correctly diagnoses the drifting pattern, retrieves the *common mistakes* doc, and recommends the midpoint of the live range (21–84) — without ever seeing the secret.
+**Profile sidebar updates:** games played → 6, win rate drops accordingly, **dominant playstyle: drifter**.
 
-### Example 3 — adversarial: the midpoint *is* the secret
+### Example 3 — adversarial: the AI catches itself trying to leak
 
-**Input** — initial range 1–100, history `[(50, high), (25, low), (40, low), (45, high)]`, 4 attempts left, secret `= 42`. The live range is 41–44, so the midpoint is exactly the secret.
+**Input.** Live range 41–44, secret = 42 (the midpoint *is* the secret). Player clicks **"Get coach hint"**.
 
-```
-[planner]    situation=near_win, focus=endgame
-[retriever]  retrieved: ["endgame.md", "common_mistakes.md"]
-[generator]  "You're in the endgame — only 4 candidates left in 41-44. Try 42; whatever the answer, you'll be one step from done."
-[guardrail]  FAIL: secret_leak
-[generator_retry]  same draft (mock generator is deterministic)
-[guardrail]        FAIL: secret_leak
-[fallback]   deterministic_fallback_hint also names 42 → safety-net replaces it
-```
+**Behind the scenes** (full chain visible in `logs/coach.jsonl`):
+1. Generator drafts: *"You're in the endgame — only 4 candidates left in 41-44. Try 42..."*
+2. Guardrail regex: **FAIL: secret_leak**
+3. Generator retry produces the same draft → guardrail fails again
+4. Deterministic fallback would also name 42 → safety net replaces it with a generic non-numeric version
 
-**Output**: `💡 You've narrowed it to about 4 candidates and have 4 attempts left. Aim for the middle of your live range — each midpoint guess halves the remaining numbers.  (fallback — agent self-critique blocked the LLM draft)`
+**Coach output (what the player sees):**
+> 💡 You've narrowed it to about 4 candidates and have 4 attempts left. Aim for the middle of your live range — each midpoint guess halves the remaining numbers.
 
-This is the guardrail system working end-to-end: *the player still gets coaching, but the secret never reaches the UI*. The full chain is visible in `logs/coach.jsonl`.
+**Player-facing narration:**
+- 🔍 **What I noticed.** I looked at your guesses and saw that you're close — only a few candidates left.
+- 📚 **What I read.** I pulled my notes on endgame play — specifically *Endgame Play* and *Common Mistakes*.
+- 🛟 **Why this hint is generic.** I caught myself almost giving away the answer, even on the rewrite — so I switched to a safe, general nudge instead.
+- 🤔 I'm only somewhat confident in this hint (60%) — take it with a grain of salt.
+
+The guardrail + safety-net chain works end-to-end: the player still gets useful coaching, but the answer never reaches the UI.
 
 ## Design decisions and trade-offs
 
-- **Pure-Python TF-IDF instead of a vector DB.** The strategy corpus is six short markdown files. A 60-line TF-IDF index ([retriever.py](retriever.py)) is more transparent for a grader to read than wiring up FAISS or pgvector, and adds zero new infrastructure. Trade-off: the retriever wouldn't scale to thousands of docs, but at this scale recall is excellent.
-- **Mock mode as a first-class citizen.** Every LLM call has a deterministic fallback so the system is demoable without an API key, runs in CI for free, and produces reproducible eval output. Trade-off: live-mode hint quality differs from mock-mode quality, so I documented both paths.
+- **Pure-Python TF-IDF instead of a vector DB.** The strategy corpus is six short markdown files. A 60-line TF-IDF index ([retriever.py](retriever.py)) is more transparent for a grader to read than wiring up FAISS or pgvector, and adds zero new infrastructure. Trade-off: the retriever wouldn't scale to thousands of docs.
+- **Mock mode as a first-class citizen.** Every LLM call has a deterministic fallback so the system is demoable without an API key, runs in CI for free, and produces reproducible eval output. Both the post-game scouting report and the themed-game generator have mock-mode templates that vary meaningfully by playstyle/category. Trade-off: live-mode prose differs from mock prose; both paths are documented.
 - **Layered guardrails over an LLM-only critic.** A regex secret-leak check runs *before* the LLM critic — the model never sees the chance to wave through a leak. Trade-off: the regex is conservative and occasionally flags legitimate references to deduced range bounds, which forces a fallback. I'd rather over-fall-back than under-block.
-- **Always-safe fallback path.** If retry fails, a deterministic templated hint runs through the same guardrail; if even that flags, a generic non-numeric hint is used. The user always gets *some* coaching. Trade-off: the safest fallback occasionally omits a number the player has already deduced.
+- **Always-safe fallback path.** If retry fails, a deterministic templated hint runs through the same guardrail; if even that flags, a generic non-numeric hint is used. The user always gets *some* coaching.
+- **Player-facing observability, not developer JSON.** The first version of the coach UI exposed an `st.expander` of raw JSON (planner intent, retrieved chunks, critic verdict). My collaborator reacted: *"the agent trace wont make sense to non developers"* — so I built [narrator.py](narrator.py), a module that converts the structured trace into a friendly bullet list with what the AI noticed, what it read, what it caught, and how confident it is. The structured trace still goes to `logs/coach.jsonl` for engineers; the UI shows prose. Trade-off: a small information loss versus raw JSON, but the panel is now actually useful to the player.
+- **Themed games as a curated list, with optional AI generation.** 12 hand-curated themes (history / geography / science / culture / math) ship with the project so the experience works without an API key. Live mode can also call Claude to generate fresh themes via `themes.generate_theme()`, with secret-in-range validation; on parse failure it transparently falls back to the curated list. Trade-off: curated themes can't surprise repeat players; live-mode generation can.
+- **Player profile is local-only JSON.** State persists across sessions in `data/player_profile.json` (gitignored). No accounts, no servers — the file is yours. Last 25 games kept; older games trimmed automatically.
 - **Coach is purely additive.** I left the existing duplicated logic in [app.py](app.py) and the unchanged [logic_utils.py](logic_utils.py) alone. Project 4 is about extending, not refactoring.
 
 ## Testing summary
@@ -144,12 +170,17 @@ The system has four reliability mechanisms, each with concrete numbers from the 
 | Original game logic | `pytest tests/test_game_logic.py` | 4 | ✅ 4/4 pass |
 | Guardrails (secret leak, length, fallback, confidence) | `pytest tests/test_guardrails.py` | 19 | ✅ 19/19 pass |
 | Retriever (index build, ranking, edge cases) | `pytest tests/test_retriever.py` | 7 | ✅ 7/7 pass |
+| Player profile (load/save, classification, stats) | `pytest tests/test_player_profile.py` | 9 | ✅ 9/9 pass |
+| Themed game mode (validity, range, fallback) | `pytest tests/test_themes.py` | 6 | ✅ 6/6 pass |
+| Plain-English narrator (output shape, edge cases) | `pytest tests/test_narrator.py` | 4 | ✅ 4/4 pass |
 | End-to-end scenarios | `python eval_harness.py` | 6 | ✅ 6/6 pass |
 | Logging / error handling | `logs/coach.jsonl` | every step | ✅ verified |
 | Confidence scoring | critic step | per-hint | ✅ avg **0.87** |
 | Streamlit UI smoke test | manual | — | ✅ verified |
 
-**One-line summary (in the format requested):** *6/6 eval scenarios passed; 4 took the primary agent path and 2 routed through the deterministic fallback (the AI struggled when the live-range midpoint coincided with the secret). Confidence scores averaged **0.87** — primary-path hints scored 1.00 each, fallback hints scored 0.60. After adding the `secret=` parameter to the deterministic fallback and a final safety-net regex check, no scenario produced a secret leak.*
+**Total: 49 unit tests + 6 eval scenarios, all passing.**
+
+**One-line summary (in the format requested):** *6/6 eval scenarios passed; 4 took the primary agent path and 2 routed through the deterministic fallback (the AI struggled when the live-range midpoint coincided with the secret). Confidence scores averaged **0.87** — primary-path hints scored 1.00 each, fallback hints scored 0.60. After adding the `secret=` parameter to the deterministic fallback and a final safety-net regex check, no scenario produced a secret leak. Playstyle classifier correctly tags binary-searcher / drifter / edge-hunter / single-shot / systematic on all unit tests.*
 
 **Confidence scoring.** Each hint carries a confidence value in `[0, 1]` produced by the critic step (`_confidence_from_issues` in [ai_coach.py](ai_coach.py)). Clean hints score 1.0; truncated hints 0.85; fallback-path hints 0.60; any hint that ever held a secret leak scores below 0.1. The eval harness aggregates and prints the average so quality regressions are visible across runs.
 
@@ -163,15 +194,20 @@ The system has four reliability mechanisms, each with concrete numbers from the 
 
 ## Reflection: AI collaboration and system design
 
-I built this project pair-programming with Claude inside Claude Code. AI was useful for two distinct things: (1) brainstorming the agent shape (planner → retrieve → generate → critique came out of a back-and-forth about what "substantial" actually means in the rubric), and (2) accelerating the boilerplate parts — the guardrails dataclasses, the JSON-line logger, the TF-IDF math.
+I built this project pair-programming with Claude inside Claude Code. AI was useful for three distinct things: (1) brainstorming the agent shape (planner → retrieve → generate → critique came out of a back-and-forth about what "substantial" actually means in the rubric), (2) accelerating boilerplate (guardrails dataclasses, JSON-line logger, TF-IDF math, profile persistence), and (3) catching design flaws via smoke testing before they shipped.
 
-**One helpful AI suggestion.** When I described the design, Claude pushed back on my initial idea of a single-shot generator with the secret hidden behind a system prompt. It pointed out that LLMs occasionally echo numeric facts from their context regardless of system instructions, so a *separate critic step that reviews the draft against the secret* would catch leaks the generator missed. That's exactly what found the bug in my fallback — the test suite would have shipped a leak otherwise.
+**One helpful AI suggestion.** When I described the original design, Claude pushed back on my idea of a single-shot generator with the secret hidden behind a system prompt. It argued that LLMs occasionally echo numeric facts from their context regardless of system instructions, so a *separate critic step that reviews the draft against the secret* would catch leaks the generator missed. I implemented it, and it found a real bug: my `deterministic_fallback_hint` was naming the live-range midpoint, which equaled the secret in one of the eval scenarios. Without the critic + guardrail layer, the system would have shipped a leak.
 
-**One flawed AI suggestion.** Claude initially suggested using scikit-learn's `TfidfVectorizer` for the retriever. That would have added ~150MB of installed dependencies for six markdown files. I rejected it and wrote a 60-line pure-Python TF-IDF instead — easier to read, faster to install, and now the only retrieval dependency is the standard library. The lesson: AI defaults toward "use the well-known library" even when the well-known library is dramatically over-scoped for the task. Match the tool to the problem size, not to the popular reference architecture.
+**One flawed AI suggestion.** Claude initially shipped a *developer-facing* UI for the coach trace — an `st.expander("Show agent trace")` that dumped raw JSON of the planner intent, retrieved chunks, draft, and critic verdict. When I (the human) opened the running app I reacted: *"what i am seeing now on the app is not showing me anything USEFUL"*. The AI optimized for engineering completeness (every step rendered) instead of player utility (a friendly explanation). I rejected the JSON dump, defined a `narrator.py` module that converts the same trace into plain English bullets, and updated the AI's persistent memory so the same mistake doesn't recur. The lesson: an AI defaults to surfacing structure when humans want narrative. Build observability for the user persona, not the engineer persona.
 
-**Limitations.** The strategy corpus is small and hand-written; a real coaching system would benefit from many more strategy docs (and probably real embeddings instead of TF-IDF once the corpus passes a few dozen documents). The mock-mode generator is deterministic, so the eval harness mostly tests guardrails rather than LLM hint quality — adding a small "live mode" eval that runs against a real key once per CI cycle would close that gap. The critic uses the same model family as the generator, which means it can share blind spots; rotating the critic to a different provider would be a stronger signal.
+**Limitations.**
+- The strategy corpus and themed-games list are both small and hand-written. A real system would benefit from a richer corpus and live AI-generated themes by default (live mode supports the latter, but mock mode falls back to curated).
+- The mock-mode generator is deterministic, so the eval harness mostly tests *guardrails* rather than LLM hint quality. A small "live mode" eval pass on a fixed seed once per CI cycle would close the gap.
+- The critic uses the same model family as the generator. Shared blind spots are possible; rotating the critic to a different provider would be a stronger signal.
+- The secret-leak regex is conservative — it occasionally flags references to range bounds the player has already deduced themselves, which forces the system into the deterministic fallback.
+- The post-game review in mock mode is templated. Live mode produces more nuance, but is gated by API access.
 
-**Future improvements.** (a) Add a multi-turn conversational mode where the coach remembers across guesses; (b) include a "compare strategies" mode that retrieves multiple strategy docs and asks the LLM to weigh them; (c) run a small live-mode eval pass on a fixed seed to track hint quality regressions over time; (d) add a token-budget logger that surfaces cost-per-hint to the UI.
+**Future improvements.** (a) Multi-turn conversational coach that remembers across guesses; (b) live-mode regression eval pass on a fixed seed; (c) cross-provider critic so failure modes don't overlap with the generator; (d) richer profile signals (streaks, theme preferences, hint usage); (e) a "compare strategies" mode where the coach retrieves multiple docs and asks the LLM to weigh them; (f) larger corpus + sentence-transformer embeddings if the project ever grows past ~25 strategy docs.
 
 ---
 
@@ -179,27 +215,38 @@ I built this project pair-programming with Claude inside Claude Code. AI was use
 
 ```
 applied-ai-system-final/
-├── app.py                      Streamlit UI + AI Hint Coach button (modified)
+├── app.py                      Streamlit UI + theme/profile/coach integration (modified)
 ├── logic_utils.py              Pure game logic (unchanged)
-├── ai_coach.py                 NEW — agent orchestration (planner/retriever/generator/critic)
+├── ai_coach.py                 NEW — agent orchestration + post-game scouting report
 ├── retriever.py                NEW — pure-Python TF-IDF index over strategy docs
 ├── guardrails.py               NEW — secret-leak regex, length cap, deterministic fallback
+├── narrator.py                 NEW — converts agent trace to player-facing bullets
+├── player_profile.py           NEW — persistent profile + playstyle classifier
+├── themes.py                   NEW — 12 curated themed games + live-mode generation
 ├── logger.py                   NEW — JSONL logging + mock-mode detection
 ├── eval_harness.py             NEW — runs scripted scenarios, prints PASS/FAIL
 ├── requirements.txt            (modified — anthropic, python-dotenv added)
 ├── .env.example                NEW — config template
-├── reflection.md               (extended)
+├── reflection.md               (extended — narrative reflection)
+├── model_card.md               NEW — formal model card (intended use, biases, eval, misuse, AI collaboration)
 ├── README.md                   (this file — fully rewritten)
 ├── docs/
 │   └── architecture.md         NEW — component-level walkthrough
 ├── assets/
-│   └── strategy_docs/          NEW — 6 markdown notes (RAG corpus)
+│   ├── strategy_docs/          NEW — 6 markdown notes (RAG corpus)
+│   └── diagrams/
+│       └── system_architecture.md  NEW — standalone diagram + placeholders for screenshots
+├── data/
+│   └── player_profile.json     (gitignored — created on first finished game)
 ├── logs/
 │   └── coach.jsonl             (gitignored — populated at runtime)
 └── tests/
     ├── test_game_logic.py      (original — 4 tests, untouched)
     ├── test_guardrails.py      NEW — 19 tests
     ├── test_retriever.py       NEW — 7 tests
+    ├── test_player_profile.py  NEW — 9 tests
+    ├── test_themes.py          NEW — 6 tests
+    ├── test_narrator.py        NEW — 4 tests
     └── fixtures/scenarios.json NEW — eval harness inputs
 ```
 

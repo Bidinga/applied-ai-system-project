@@ -78,3 +78,32 @@ The AI initially suggested using `sklearn.feature_extraction.text.TfidfVectorize
 - **Cross-provider critic.** Make the critic call a different provider so its blind spots don't overlap with the generator's.
 - **Bigger corpus + real embeddings.** If the project grew to support adjacent games (Wordle-style, Mastermind), I'd swap TF-IDF for sentence-transformers or hosted embeddings.
 
+---
+
+# 💭 Reflection: Project 4 — second pass (themed games, profile, narrator)
+
+After the first pass landed I opened the running app and reacted to my own work as a player, not an engineer. The coach panel was full of developer noise: a "🟡 mock mode (no API key)" status banner, a JSON `st.expander("Show agent trace")` dumping raw planner intent and critic verdict, the secret visible in the *Developer Debug Info* panel. As a player I couldn't FEEL the AI doing anything for me — the surface was a debug tool. I told my AI collaborator: *"what i am seeing now on the app is not showing me anything USEFUL"* and asked for new meaningful features.
+
+## What changed in the second pass
+
+**1. Plain-English coach narration ([narrator.py](narrator.py)).** The same structured trace still flows to `logs/coach.jsonl` for engineers, but the UI now renders a friendly bullet list: what the AI noticed, what notes it pulled, what it caught itself doing, and how confident it is. The player sees prose, not JSON.
+
+**2. Persistent player profile ([player_profile.py](player_profile.py)).** Every finished game is appended to `data/player_profile.json`. The sidebar shows games played, win rate, average attempts to win, and an AI-classified dominant playstyle (`binary_searcher`, `drifter`, `edge_hunter`, `systematic`, `single_shot`). The classification runs on the move history; it's deterministic Python, not an LLM call.
+
+**3. Post-game AI scouting report ([ai_coach.py::get_post_game_review](ai_coach.py)).** When a game ends, the coach generates a 2–4 sentence personalized review keyed off the player's playstyle, the outcome, and their long-running stats. Mock mode uses templated language that varies by playstyle (a binary searcher gets *"Keep doing exactly this"*, a drifter gets *"Pause after each piece of feedback, find the live midpoint, and guess there"*). Live mode hands the same data to Claude.
+
+**4. Themed game mode ([themes.py](themes.py)).** A sidebar selector turns the round into trivia: *Guess the year humans walked on the Moon · Guess Iceland's population · Guess Mount Everest's height in meters ·* etc. 12 hand-curated themes ship with the project so it works without an API key; live mode can also call Claude to generate fresh themes. Theme explanations are revealed at end-of-game.
+
+**5. Hidden secret.** The *Game info* panel no longer reveals the secret while the game is in progress — only after win or loss.
+
+## One helpful AI suggestion (this pass)
+
+When I described the player profile, my collaborator suggested splitting it into two layers: a *deterministic* playstyle classifier (Python rules over the move history) and an *LLM* post-game review that consumes the classifier's output. I'd been planning to send the raw move history straight to the LLM and ask it to do everything. The split turned out to be much better: the classifier is unit-testable, the review is short and focused, and the LLM has less work to do per call. The same structure now powers the narrator (deterministic transformation → optional LLM polish).
+
+## One flawed AI suggestion (this pass)
+
+I asked the AI to name the new player-state module `profile.py`. It did, and Streamlit ran fine — but Python's standard library has a stdlib `profile` module (the cProfile sibling) and there's a real risk of import collisions when other code does `import profile`. I caught it on review and renamed to `player_profile.py`. The AI defaulted to the most natural name without checking the namespace; I had to apply the engineer's discipline. Lesson: even a simple module name needs a quick `python -c "import X"` collision check before commit.
+
+## What this round taught me
+
+The single biggest insight from this pass: *the AI's natural output is structure, but humans want narrative*. A JSON trace is technically more informative than a bullet list — it has more facts. But the bullet list is more useful because it explains, in language, what the system did and why. Designing for the user means doing the structure → narrative transformation yourself; the AI won't do it by default. I now treat "the AI gave me a structured response, what would a person actually want to read?" as a deliberate design step, not something to skip.

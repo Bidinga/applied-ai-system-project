@@ -480,3 +480,98 @@ def get_hint(state: GameState) -> CoachResult:
     )
     # Fallback hints are deterministic and known-safe but generic — moderate confidence.
     return CoachResult(hint=fallback, used_fallback=True, trace=trace, confidence=0.6)
+
+
+# ---------------------------------------------------------------------------
+# Post-game AI scouting report
+# ---------------------------------------------------------------------------
+
+
+def _mock_review(stats: dict, this_game: dict) -> str:
+    """Templated review used in mock mode.
+
+    Picks language based on the player's playstyle, the outcome, and the
+    win-rate trend — gives different feedback to different players so the
+    review feels personalized even without a real LLM.
+    """
+    playstyle = this_game.get("playstyle", "systematic")
+    won = this_game.get("won", False)
+    attempts = this_game.get("attempts", 0)
+    games_played = stats.get("games_played", 0)
+    win_rate = stats.get("win_rate", 0.0)
+    avg_to_win = stats.get("avg_attempts_to_win")
+
+    style_descriptions = {
+        "binary_searcher": "You played like a textbook binary searcher — every guess sat near the midpoint of your live range. That's the strongest strategy by the numbers.",
+        "edge_hunter": "You leaned heavily on guesses near the boundaries of your live range. That works when you're confirming a hunch but eats more attempts than midpoint play.",
+        "drifter": "Your guesses bounced around without a clear pattern — a classic drifter run. The fastest fix: after each piece of feedback, recompute the midpoint of what's still possible and aim there.",
+        "systematic": "You narrowed the range methodically without committing fully to binary search. Solid base; tightening to midpoint-only would shave attempts.",
+        "single_shot": "Quick game — not enough moves to read a pattern.",
+    }
+
+    outcome_phrases = []
+    if won:
+        outcome_phrases.append(f"You won in {attempts} attempt{'s' if attempts != 1 else ''}.")
+    else:
+        outcome_phrases.append(f"You ran out of attempts this round.")
+
+    trend_phrases = []
+    if games_played >= 3:
+        trend_phrases.append(f"Across your {games_played} games your win rate is {win_rate}%.")
+        if avg_to_win is not None:
+            trend_phrases.append(f"You average {avg_to_win} attempts when you win.")
+    elif games_played == 2:
+        trend_phrases.append("Two games in — keep playing and I'll start spotting trends.")
+    else:
+        trend_phrases.append("First game on record. Your profile starts here.")
+
+    encouragement = []
+    if won and playstyle == "binary_searcher":
+        encouragement.append("Keep doing exactly this.")
+    elif won:
+        encouragement.append("Nice work — try sticking to the midpoint of your live range next time and see if you can shave an attempt off.")
+    elif playstyle == "drifter":
+        encouragement.append("Next game: pause after each piece of feedback, find the live midpoint, and guess there.")
+    else:
+        encouragement.append("Tough loss. Same strategy with one more discipline check on the live range and you'll get there.")
+
+    pieces = [style_descriptions.get(playstyle, style_descriptions["systematic"])] + outcome_phrases + trend_phrases + encouragement
+    return " ".join(pieces)
+
+
+def get_post_game_review(stats: dict, this_game: dict) -> str:
+    """Return a 2-4 sentence scouting report on the player's last game.
+
+    `stats` comes from `player_profile.stats_summary(profile)` — the
+    aggregate-stats dict (win rate, avg attempts, dominant playstyle).
+    `this_game` is the most recent GameSummary as a dict.
+
+    Mock mode uses a templated review keyed off playstyle and outcome;
+    live mode passes the same data to Claude for a custom write-up.
+    """
+    if is_mock_mode():
+        review = _mock_review(stats, this_game)
+        log_event("post_game_review", used_mock=True, review=review)
+        return review
+
+    system = (
+        "You are a friendly coach writing a 2-4 sentence scouting report on "
+        "a player who just finished a number-guessing round. Reference one "
+        "concrete observation about their playstyle, comment on the outcome, "
+        "and end with one specific, actionable suggestion. No emojis, no "
+        "bullet lists, no headings — write like a person."
+    )
+    user = (
+        f"Aggregate stats: {stats}\n"
+        f"This game: {this_game}\n\n"
+        f"Write the scouting report now."
+    )
+
+    with TimedStep("post_game_review", model=_generator_model()) as step:
+        try:
+            review = _call_llm(_generator_model(), system, user, max_tokens=300)
+            step.add(review=review)
+            return review.strip() or _mock_review(stats, this_game)
+        except Exception as e:
+            step.add(error=str(e), used_fallback=True)
+            return _mock_review(stats, this_game)
