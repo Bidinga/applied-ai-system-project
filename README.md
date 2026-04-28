@@ -1,22 +1,22 @@
-# 🎮 Game Glitch Investigator + 🧠 AI Coach, Profile & Themed Games
+  Game Glitch Investigator +  AI Coach, Profile & Themed Games
 
 > **Project 4 — Applied AI System.** Extends a previous coursework project with a substantial set of new AI features (RAG, agentic workflow, persistent player profile, AI scouting reports, themed trivia games, plain-English coach narration, reliability harness) fully integrated into the running app.
 
-## Original project (Modules 1–3)
+ Original project (Modules 1–3)
 
 The base project is **Game Glitch Investigator: The Impossible Guesser** — a Streamlit number-guessing game built as a debugging exercise. The original goal was to teach students to (1) play and diagnose a working-but-broken AI-generated app, (2) fix inverted higher/lower hints, and (3) refactor the logic into a unit-tested [logic_utils.py](logic_utils.py) module covered by pytest. Capabilities: interactive guessing with three difficulty levels, score tracking, session-state persistence, and a "Developer Debug" panel — but **no AI integration of any kind**.
 
-## What this project adds
+## What i added to the project 
 
 The extension turns a single-shot guessing exercise into an applied AI system that *gets to know the player*. Concretely:
 
-- **🧠 AI Hint Coach** — agentic loop (*plan → retrieve → generate → self-critique*) over a custom RAG corpus of guessing-strategy notes. Hint never reveals the secret thanks to layered guardrails.
-- **🗣️ Plain-English coach narration** — instead of a JSON agent-trace dump, the UI shows a friendly bullet list ("I noticed you're drifting · I read my notes on Common Mistakes · I caught my first draft was leaking the answer · I'm fairly confident in this hint") so non-developers can see the AI thinking.
-- **📋 Persistent player profile** — every finished game is saved to `data/player_profile.json`. The sidebar shows games played, win rate, average attempts to win, and the **AI-classified playstyle** (`binary_searcher` / `edge_hunter` / `drifter` / `systematic` / `single_shot`).
-- **📝 AI scouting report** — when a game ends, a templated-or-LLM-generated 2–4 sentence personalized review tells the player how they played, references their stats, and gives one specific suggestion for next time.
-- **🎯 Themed game mode** — a sidebar selector turns the round into trivia: *Guess the year humans walked on the Moon · Guess Iceland's population · Guess the height of Mount Everest in meters · Guess the year Leonardo started the Mona Lisa · Pi to 4 digits ·* and 7 more. The fact is revealed at end-of-game.
-- **🔒 No more spoilers** — the *Developer Debug* panel from Modules 1–3 no longer reveals the secret while the game is in progress; it shows only after win/loss.
-- **🛡️ Reliability layer** — guardrails (secret-leak regex, length cap, fallback hint, defense-in-depth safety net), structured JSONL logging of every LLM call, eval harness with PASS/FAIL summary and confidence aggregation, 49 unit tests.
+- ** AI Hint Coach** — agentic loop (*plan → retrieve → generate → self-critique*) over a custom RAG corpus of guessing-strategy notes. Hint never reveals the secret thanks to layered guardrails.
+- ** coach narration** — the UI shows a friendly bullet list ("I noticed you're drifting · I read my notes on Common Mistakes · I caught my first draft was leaking the answer · I'm fairly confident in this hint") so non-developers can see the AI thinking.
+- **Persistent player profile** — every finished game is saved to `data/player_profile.json`. The sidebar shows games played, win rate, average attempts to win, and the **AI-classified playstyle** (`binary_searcher` / `edge_hunter` / `drifter` / `systematic` / `single_shot`).
+- **AI scouting report** — when a game ends, a templated-or-LLM-generated 2–4 sentence personalized review tells the player how they played, references their stats, and gives one specific suggestion for next time.
+- **Themed game mode** — a sidebar selector turns the round into trivia: *Guess the year humans walked on the Moon · Guess Iceland's population · Guess the height of Mount Everest in meters · Guess the year Leonardo started the Mona Lisa · Pi to 4 digits ·* and 7 more. The fact is revealed at end-of-game.
+- ** No more spoilers** — the *Developer Debug* panel from Modules 1–3 no longer reveals the secret while the game is in progress; it shows only after win/loss.
+- ** Reliability layer** — guardrails (secret-leak regex, length cap, fallback hint, defense-in-depth safety net), structured JSONL logging of every LLM call, eval harness with PASS/FAIL summary and confidence aggregation, 49 unit tests.
 
 Why it matters: the game now *uses AI to do something the user can feel* — describing how they play, generating personalized feedback, picking themes, and explaining its own thinking — instead of bolting AI on as a side panel.
 
@@ -99,13 +99,11 @@ python eval_harness.py
 pytest -q
 ```
 
-To run with the real LLM, set `ANTHROPIC_API_KEY` in `.env` and either remove `MOCK_MODE` or set it to `false`. The same code path runs — only the planner, generator, and critic switch from canned responses to live Claude calls.
-
 ## Sample interactions
 
-All examples are real outputs captured in mock mode (deterministic canned LLM responses; retrieval, guardrails, profile, and narration run for real).
+All examples are real outputs given during testing
 
-### Example 1 — themed game with plain-English coach narration
+### Example 1 — themed game with coach narration
 
 **Input.** Player picks **Game mode → "Moon landing"** in the sidebar. The header shows: *"Guess the year humans first walked on the Moon."* Range 1900–2000. Player guesses 1950 (too low), 1990 (too high), then clicks **"Get coach hint"**.
 
@@ -113,12 +111,12 @@ All examples are real outputs captured in mock mode (deterministic canned LLM re
 > 💡 Your live range is 1951-1989. The midpoint 1970 eliminates the most candidates regardless of the answer.
 
 **"How the coach thought about this" expander (player-facing, no JSON):**
-- 🔍 **What I noticed.** I looked at your guesses and saw that you've made some progress narrowing the range.
-- 📚 **What I read.** I pulled my notes on how to shrink the live range — specifically *Range Narrowing* and *Binary Search*.
-- ✅ **What I checked.** I re-read my hint with the answer in front of me to make sure I wasn't accidentally giving it away.
-- 💪 I'm very confident in this hint (100%).
+-  **What I noticed.** I looked at your guesses and saw that you've made some progress narrowing the range.
+-  **What I read.** I pulled my notes on how to shrink the live range — specifically *Range Narrowing* and *Binary Search*.
+- **What I checked.** I re-read my hint with the answer in front of me to make sure I wasn't accidentally giving it away.
+-  I'm very confident in this hint (100%).
 
-After the win on attempt 4, the theme reveal appears: *"📖 **Moon landing** — Apollo 11. Neil Armstrong stepped onto the lunar surface on July 20, 1969."*
+After the win on attempt 4, the theme reveal appears: *" **Moon landing** — Apollo 11. Neil Armstrong stepped onto the lunar surface on July 20, 1969."*
 
 ### Example 2 — post-game scouting report (drifter loss)
 
@@ -140,13 +138,13 @@ After the win on attempt 4, the theme reveal appears: *"📖 **Moon landing** �
 4. Deterministic fallback would also name 42 → safety net replaces it with a generic non-numeric version
 
 **Coach output (what the player sees):**
-> 💡 You've narrowed it to about 4 candidates and have 4 attempts left. Aim for the middle of your live range — each midpoint guess halves the remaining numbers.
+> You've narrowed it to about 4 candidates and have 4 attempts left. Aim for the middle of your live range — each midpoint guess halves the remaining numbers.
 
 **Player-facing narration:**
-- 🔍 **What I noticed.** I looked at your guesses and saw that you're close — only a few candidates left.
-- 📚 **What I read.** I pulled my notes on endgame play — specifically *Endgame Play* and *Common Mistakes*.
-- 🛟 **Why this hint is generic.** I caught myself almost giving away the answer, even on the rewrite — so I switched to a safe, general nudge instead.
-- 🤔 I'm only somewhat confident in this hint (60%) — take it with a grain of salt.
+-  **What I noticed.** I looked at your guesses and saw that you're close — only a few candidates left.
+-  **What I read.** I pulled my notes on endgame play — specifically *Endgame Play* and *Common Mistakes*.
+-  **Why this hint is generic.** I caught myself almost giving away the answer, even on the rewrite — so I switched to a safe, general nudge instead.
+-  I'm only somewhat confident in this hint (60%) — take it with a grain of salt.
 
 The guardrail + safety-net chain works end-to-end: the player still gets useful coaching, but the answer never reaches the UI.
 
@@ -167,16 +165,16 @@ The system has four reliability mechanisms, each with concrete numbers from the 
 
 | Layer | Tool | Count | Result |
 |---|---|---|---|
-| Original game logic | `pytest tests/test_game_logic.py` | 4 | ✅ 4/4 pass |
-| Guardrails (secret leak, length, fallback, confidence) | `pytest tests/test_guardrails.py` | 19 | ✅ 19/19 pass |
-| Retriever (index build, ranking, edge cases) | `pytest tests/test_retriever.py` | 7 | ✅ 7/7 pass |
-| Player profile (load/save, classification, stats) | `pytest tests/test_player_profile.py` | 9 | ✅ 9/9 pass |
-| Themed game mode (validity, range, fallback) | `pytest tests/test_themes.py` | 6 | ✅ 6/6 pass |
-| Plain-English narrator (output shape, edge cases) | `pytest tests/test_narrator.py` | 4 | ✅ 4/4 pass |
-| End-to-end scenarios | `python eval_harness.py` | 6 | ✅ 6/6 pass |
-| Logging / error handling | `logs/coach.jsonl` | every step | ✅ verified |
-| Confidence scoring | critic step | per-hint | ✅ avg **0.87** |
-| Streamlit UI smoke test | manual | — | ✅ verified |
+| Original game logic | `pytest tests/test_game_logic.py` | 4 |  4/4 pass |
+| Guardrails (secret leak, length, fallback, confidence) | `pytest tests/test_guardrails.py` | 19 |  19/19 pass |
+| Retriever (index build, ranking, edge cases) | `pytest tests/test_retriever.py` | 7 |  7/7 pass |
+| Player profile (load/save, classification, stats) | `pytest tests/test_player_profile.py` | 9 |  9/9 pass |
+| Themed game mode (validity, range, fallback) | `pytest tests/test_themes.py` | 6 |  6/6 pass |
+| Plain-English narrator (output shape, edge cases) | `pytest tests/test_narrator.py` | 4 |  4/4 pass |
+| End-to-end scenarios | `python eval_harness.py` | 6 |  6/6 pass |
+| Logging / error handling | `logs/coach.jsonl` | every step |  verified |
+| Confidence scoring | critic step | per-hint |  avg **0.87** |
+| Streamlit UI smoke test | manual | — |  verified |
 
 **Total: 49 unit tests + 6 eval scenarios, all passing.**
 
