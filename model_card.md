@@ -1,10 +1,9 @@
 # Model Card — AI Hint Coach + Themed Games System
 
-A model card for the applied-AI system extending Game Glitch Investigator (Modules 1–3). This document covers what the system does, what it shouldn't be used for, what biases and limitations it carries, and what I learned working alongside an AI assistant to build it.
-
+A model card for the applied-AI system extending Game Glitch Investigator  
 ## Overview
 
-This system adds AI features to a Streamlit number-guessing game. The headline feature is an AI Hint Coach that runs a four-step agent loop (plan, retrieve, generate, self-critique) over a custom corpus of guessing-strategy notes and produces a coaching hint without ever revealing the secret. Around that core, the system also includes a persistent player profile that classifies playstyle across sessions, a themed game mode (12 curated trivia themes plus optional AI-generated ones), an end-of-game scouting report personalized to the player, and a plain-English narration of how the coach made its decision. A reliability layer of regex guardrails, structured JSONL logging, confidence scoring, and an eval harness sits underneath all of it.
+This system adds AI features to a Streamlit number-guessing game. The headline feature is an AI Hint Coach that runs a four-step agent loop (plan, retrieve, generate, self-critique) over a custom corpus of guessing-strategy notes and produces a coaching hint without ever revealing the secret. Around that core, the system also includes a persistent player profile that classifies playstyle across sessions, a themed game mode (12 curated trivia themes plus optional AI-generated ones), an end-of-game scouting report personalized to the player, and narration of how the coach made its decision. 
 
 ## System details
 
